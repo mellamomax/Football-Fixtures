@@ -14,21 +14,24 @@ DEFAULT_NAME = 'Football Fixture'
 SCAN_INTERVAL = timedelta(minutes=120)  # Set the update interval to 120 minutes (2 hours)
 MAX_RETRIES = 3  # Number of retries for API requests
 
+# Define the platform schema, requiring the API key and allowing an optional name
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_API_KEY): cv.string,
     vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
 })
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
+    # Retrieve the API key and name from the configuration
     api_key = config.get(CONF_API_KEY)
     name = config.get(CONF_NAME)
 
+    # Create an instance of FootballFixtureSensor with the API key and name
     add_entities([FootballFixtureSensor(api_key, name)], True)
 
 class FootballFixtureSensor(Entity):
     def __init__(self, api_key, name):
-        self._api_key = api_key
-        self._name = name
+        self._api_key = api_key  # Store the API key for use in requests
+        self._name = name        # Store the name of the sensor
         self._state = None
         self._attributes = {}
         self._league_id = "140"  # Default to La Liga
@@ -52,7 +55,7 @@ class FootballFixtureSensor(Entity):
         url = f"https://v3.football.api-sports.io/fixtures?season=2024&league={self._league_id}&round=Regular Season - 1"
         headers = {
             'x-rapidapi-host': "v3.football.api-sports.io",
-            'x-rapidapi-key': self._api_key
+            'x-rapidapi-key': self._api_key  # Use the API key in the headers for authentication
         }
         _LOGGER.debug(f"Fetching fixtures for league ID {self._league_id}")
         
