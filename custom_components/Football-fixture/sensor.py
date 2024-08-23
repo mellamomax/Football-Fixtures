@@ -54,8 +54,8 @@ class FootballFixtureSensor(Entity):
         current_round = self._fetch_current_round()
         if current_round:
             self._current_round = current_round
-            self._fetch_fixtures(current_round, "current_round_fixtures")
-            self._fetch_fixtures(current_round + 1, "next_round_fixtures")
+            self._fetch_fixtures(current_round, f"Round {current_round} Fixtures")
+            self._fetch_fixtures(current_round + 1, f"Round {current_round + 1} Fixtures")
 
     def _fetch_current_round(self):
         url = f"https://v3.football.api-sports.io/fixtures/rounds?league={self._league_id}&season=2024&current=true"
@@ -112,4 +112,3 @@ class FootballFixtureSensor(Entity):
                 else:
                     self._attributes[attribute_key] = []
                     return
-
