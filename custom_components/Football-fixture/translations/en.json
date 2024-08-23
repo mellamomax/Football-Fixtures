@@ -5,7 +5,7 @@
         "title": "Configure the Football Fixture",
         "description": "Enter your API key.",
         "data": {
-          "api_key": 00925da3f88f5fc812314f66b741611b
+          "api_key": "00925da3f88f5fc812314f66b741611b"
         }
       }
     }
