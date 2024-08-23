@@ -1,0 +1,9 @@
+{
+  "domain": "football_fixture",
+  "name": "Football Fixture",
+  "version": "1.0",
+  "documentation": "https://github.com/mellamomax/football-fixture",
+  "requirements": ["requests"],
+  "dependencies": [],
+  "codeowners": ["@mellamomax"]
+} 

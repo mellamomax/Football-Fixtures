@@ -1,0 +1,1 @@
+DOMAIN = "football_fixture"
