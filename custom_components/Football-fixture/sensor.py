@@ -95,6 +95,9 @@ class FootballFixtureSensor(Entity):
                     'away_team': fixture.get('teams', {}).get('away', {}).get('name', 'Unknown'),
                     'date': fixture.get('fixture', {}).get('date', 'Unknown'),
                     'venue': fixture.get('fixture', {}).get('venue', {}).get('name', 'Unknown'),
+                    'home_team_logo': fixture.get('teams', {}).get('home', {}).get('logo', ''),
+                    'away_team_logo': fixture.get('teams', {}).get('away', {}).get('logo', ''),
+                    'score': fixture.get('score', {}).get('fulltime', {'home': None, 'away': None})
                 }
                 for fixture in data['response']
             ]
