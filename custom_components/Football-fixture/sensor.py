@@ -35,6 +35,7 @@ class FootballFixtureSensor(Entity):
         self._state = None
         self._attributes = {}
         self._league_id = "140"  # Default to La Liga
+        self._current_round = None  # Start with no round, fetch dynamically
 
     @property
     def name(self):
@@ -49,58 +50,66 @@ class FootballFixtureSensor(Entity):
         return self._attributes
 
     def update(self):
-        self._fetch_fixtures()
+        # Fetch current round dynamically
+        current_round = self._fetch_current_round()
+        if current_round:
+            self._current_round = current_round
+            self._fetch_fixtures(current_round, "current_round_fixtures")
+            self._fetch_fixtures(current_round + 1, "next_round_fixtures")
 
-    def _fetch_fixtures(self):
-        url = f"https://v3.football.api-sports.io/fixtures?season=2024&league={self._league_id}&round=Regular Season - 1"
+    def _fetch_current_round(self):
+        url = f"https://v3.football.api-sports.io/fixtures/rounds?league={self._league_id}&season=2024&current=true"
         headers = {
             'x-rapidapi-host': "v3.football.api-sports.io",
-            'x-rapidapi-key': self._api_key  # Use the API key in the headers for authentication
+            'x-rapidapi-key': self._api_key
         }
-        _LOGGER.debug(f"Fetching fixtures for league ID {self._league_id}")
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            if 'response' in data and data['response']:
+                return int(data['response'][0].split(" - ")[-1])  # Extract round number from response
+        except requests.exceptions.RequestException as e:
+            _LOGGER.error(f"Error fetching current round: {e}")
+        return None
+
+    def _fetch_fixtures(self, round_number, attribute_key):
+        url = f"https://v3.football.api-sports.io/fixtures?league={self._league_id}&season=2024&round=Regular Season - {round_number}"
+        headers = {
+            'x-rapidapi-host': "v3.football.api-sports.io",
+            'x-rapidapi-key': self._api_key
+        }
+        _LOGGER.debug(f"Fetching fixtures for league ID {self._league_id}, round {round_number}")
         
         retries = 0
         while retries < MAX_RETRIES:
             try:
                 response = requests.get(url, headers=headers)
-                response.raise_for_status()  # Raises an HTTPError if the response was unsuccessful
-                
-                try:
-                    data = response.json()
-                    _LOGGER.debug("Fixtures response data: %s", data)
-                    break  # Exit the loop on successful data retrieval
-                except ValueError as json_err:
-                    _LOGGER.error(f"Error decoding JSON response: {json_err}")
-                    self._state = "Invalid API response"
-                    self._attributes = {}
-                    return
-
+                response.raise_for_status()
+                data = response.json()
+                if 'response' in data and data['response']:
+                    self._attributes[attribute_key] = [
+                        {
+                            'home_team': fixture.get('teams', {}).get('home', {}).get('name', 'Unknown'),
+                            'away_team': fixture.get('teams', {}).get('away', {}).get('name', 'Unknown'),
+                            'date': fixture.get('fixture', {}).get('date', 'Unknown'),
+                            'venue': fixture.get('fixture', {}).get('venue', {}).get('name', 'Unknown'),
+                            'home_team_logo': fixture.get('teams', {}).get('home', {}).get('logo', ''),
+                            'away_team_logo': fixture.get('teams', {}).get('away', {}).get('logo', ''),
+                            'score': fixture.get('score', {}).get('fulltime', {'home': None, 'away': None})
+                        }
+                        for fixture in data['response']
+                    ]
+                else:
+                    self._attributes[attribute_key] = []
+                break
             except requests.exceptions.RequestException as e:
-                _LOGGER.error(f"Error fetching fixtures from {url}: {e}")
+                _LOGGER.error(f"Error fetching fixtures from {url} for round {round_number}: {e}")
                 retries += 1
                 if retries < MAX_RETRIES:
                     _LOGGER.info(f"Retrying... ({retries}/{MAX_RETRIES})")
                     time.sleep(2 ** retries)  # Exponential backoff
                 else:
-                    self._state = "API error"
-                    self._attributes = {}
+                    self._attributes[attribute_key] = []
                     return
 
-        # Process the data if successfully retrieved
-        if data and 'response' in data and data['response']:
-            self._state = f"{len(data['response'])} fixtures found"
-            self._attributes['fixtures'] = [
-                {
-                    'home_team': fixture.get('teams', {}).get('home', {}).get('name', 'Unknown'),
-                    'away_team': fixture.get('teams', {}).get('away', {}).get('name', 'Unknown'),
-                    'date': fixture.get('fixture', {}).get('date', 'Unknown'),
-                    'venue': fixture.get('fixture', {}).get('venue', {}).get('name', 'Unknown'),
-                    'home_team_logo': fixture.get('teams', {}).get('home', {}).get('logo', ''),
-                    'away_team_logo': fixture.get('teams', {}).get('away', {}).get('logo', ''),
-                    'score': fixture.get('score', {}).get('fulltime', {'home': None, 'away': None})
-                }
-                for fixture in data['response']
-            ]
-        else:
-            self._state = "No fixtures found"
-            self._attributes = {}
