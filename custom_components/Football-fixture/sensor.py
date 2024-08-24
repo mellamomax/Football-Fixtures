@@ -54,6 +54,7 @@ class FootballFixtureSensor(Entity):
         current_round = self._fetch_current_round()
         if current_round:
             self._current_round = current_round
+            self._attributes['current_round'] = current_round  # Store the current round in attributes
             self._fetch_fixtures(current_round, f"Round {current_round} Fixtures")
             self._fetch_fixtures(current_round + 1, f"Round {current_round + 1} Fixtures")
 
