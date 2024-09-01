@@ -51,8 +51,33 @@ class FootballFixtureSensor(Entity):
         return self._attributes
 
     def update(self):
+        
+        # Fetch the current round first
+        self._fetch_current_round()
+        
         # Fetch all fixtures for the entire season in one call
         self._fetch_all_fixtures()
+
+
+
+    def _fetch_current_round(self):
+        url = f"https://v3.football.api-sports.io/fixtures/rounds?league={self._league_id}&season=2024&current=true"
+        headers = {
+            'x-rapidapi-host': "v3.football.api-sports.io",
+            'x-rapidapi-key': self._api_key
+        }
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            if 'response' in data and data['response']:
+                # Extract the current round number from the API response
+                self._current_round = int(data['response'][0].split(" - ")[-1])
+                self._attributes['current_round'] = self._current_round  # Store the current round in attributes
+            else:
+                _LOGGER.error("No current round found in API response")
+        except requests.exceptions.RequestException as e:
+            _LOGGER.error(f"Error fetching current round: {e}")
 
     def _fetch_all_fixtures(self):
         url = f"https://v3.football.api-sports.io/fixtures?league={self._league_id}&season=2024"
