@@ -36,6 +36,7 @@ class FootballFixtureSensor(Entity):
         self._attributes = {}
         self._league_id = "140"  # Default to La Liga
         self._current_round = None  # Start with no round, fetch dynamically
+        self._last_fetched_data = {}  # Initialize to store the last fetched data
 
     @property
     def name(self):
@@ -50,38 +51,17 @@ class FootballFixtureSensor(Entity):
         return self._attributes
 
     def update(self):
-        # Fetch current round dynamically
-        current_round = self._fetch_current_round()
-        if current_round:
-            self._current_round = current_round
-            self._attributes['current_round'] = current_round  # Store the current round in attributes
-            self._fetch_fixtures(current_round, f"Round {current_round} Fixtures")
-            self._fetch_fixtures(current_round + 1, f"Round {current_round + 1} Fixtures")
+        # Fetch all fixtures for the entire season in one call
+        self._fetch_all_fixtures()
 
-    def _fetch_current_round(self):
-        url = f"https://v3.football.api-sports.io/fixtures/rounds?league={self._league_id}&season=2024&current=true"
+    def _fetch_all_fixtures(self):
+        url = f"https://v3.football.api-sports.io/fixtures?league={self._league_id}&season=2024"
         headers = {
             'x-rapidapi-host': "v3.football.api-sports.io",
             'x-rapidapi-key': self._api_key
         }
-        try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-            if 'response' in data and data['response']:
-                return int(data['response'][0].split(" - ")[-1])  # Extract round number from response
-        except requests.exceptions.RequestException as e:
-            _LOGGER.error(f"Error fetching current round: {e}")
-        return None
+        _LOGGER.debug(f"Fetching all fixtures for league ID {self._league_id}")
 
-    def _fetch_fixtures(self, round_number, attribute_key):
-        url = f"https://v3.football.api-sports.io/fixtures?league={self._league_id}&season=2024&round=Regular Season - {round_number}"
-        headers = {
-            'x-rapidapi-host': "v3.football.api-sports.io",
-            'x-rapidapi-key': self._api_key
-        }
-        _LOGGER.debug(f"Fetching fixtures for league ID {self._league_id}, round {round_number}")
-        
         retries = 0
         while retries < MAX_RETRIES:
             try:
@@ -89,8 +69,12 @@ class FootballFixtureSensor(Entity):
                 response.raise_for_status()
                 data = response.json()
                 if 'response' in data and data['response']:
-                    self._attributes[attribute_key] = [
-                        {
+                    fixtures_by_round = {}
+                    for fixture in data['response']:
+                        round_number = fixture.get('league', {}).get('round', 'Unknown').split(" - ")[-1]
+                        if round_number not in fixtures_by_round:
+                            fixtures_by_round[round_number] = []
+                        fixtures_by_round[round_number].append({
                             'home_team': fixture.get('teams', {}).get('home', {}).get('name', 'Unknown'),
                             'away_team': fixture.get('teams', {}).get('away', {}).get('name', 'Unknown'),
                             'date': fixture.get('fixture', {}).get('date', 'Unknown'),
@@ -98,18 +82,23 @@ class FootballFixtureSensor(Entity):
                             'home_team_logo': fixture.get('teams', {}).get('home', {}).get('logo', ''),
                             'away_team_logo': fixture.get('teams', {}).get('away', {}).get('logo', ''),
                             'score': fixture.get('score', {}).get('fulltime', {'home': None, 'away': None})
-                        }
-                        for fixture in data['response']
-                    ]
+                        })
+
+                    # Update attributes for all rounds
+                    for round_number, fixtures in fixtures_by_round.items():
+                        attribute_key = f"Round {round_number} Fixtures"
+                        if fixtures != self._last_fetched_data.get(attribute_key):
+                            self._attributes[attribute_key] = fixtures
+                            self._last_fetched_data[attribute_key] = fixtures  # Update the cache with the latest data
+                    self._state = f"{len(fixtures_by_round)} rounds fetched"
                 else:
-                    self._attributes[attribute_key] = []
+                    _LOGGER.error(f"No fixtures found for league ID {self._league_id}")
                 break
             except requests.exceptions.RequestException as e:
-                _LOGGER.error(f"Error fetching fixtures from {url} for round {round_number}: {e}")
+                _LOGGER.error(f"Error fetching fixtures from {url}: {e}")
                 retries += 1
                 if retries < MAX_RETRIES:
                     _LOGGER.info(f"Retrying... ({retries}/{MAX_RETRIES})")
                     time.sleep(2 ** retries)  # Exponential backoff
                 else:
-                    self._attributes[attribute_key] = []
-                    return
+                    _LOGGER.error("Max retries reached. Failed to fetch fixtures.")
