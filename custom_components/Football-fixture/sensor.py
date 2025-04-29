@@ -67,7 +67,7 @@ class FootballFixtureSensor(Entity):
             'x-rapidapi-key': self._api_key
         }
         try:
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=5)
             response.raise_for_status()
             data = response.json()
             if 'response' in data and data['response']:
@@ -90,7 +90,7 @@ class FootballFixtureSensor(Entity):
         retries = 0
         while retries < MAX_RETRIES:
             try:
-                response = requests.get(url, headers=headers)
+                response = requests.get(url, headers=headers, timeout=5)
                 response.raise_for_status()
                 data = response.json()
                 if 'response' in data and data['response']:
